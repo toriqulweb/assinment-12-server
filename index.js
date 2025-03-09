@@ -8,12 +8,24 @@ require("dotenv").config();
 
 const port = process.env.PORT || 5000;
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://assingment12p.web.app",
+];
+
 // middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-    ],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -34,25 +46,24 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
     // Database Collections
     const parcelCollection = client.db("parcelDB").collection("parcels");
     const userCollection = client.db("parcelDB").collection("users");
 
-
     // Users APIs
+    // ---------------------------------------
+    // Create User
     app.post("/users", async (req, res) => {
       const newUser = req.body;
       const bodyEmail = { email: newUser.email };
       const existingEmail = await userCollection.findOne(bodyEmail);
       if (existingEmail) {
-        return;
+        return res.send({ message: "User Already Exists" });
       }
       const result = await userCollection.insertOne(newUser);
       res.send(result);
@@ -66,14 +77,35 @@ async function run() {
       res.send(result);
     });
 
+    // Update User by email
+    app.put("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updatedDoc = req.body;
+      const newData = {
+        $set: {
+          name: updatedDoc.name,
+          imgUrl: updatedDoc.imgUrl,
+          phone: updatedDoc.phone,
+        },
+      };
+      const result = await userCollection.updateOne(filter, newData, options);
+      res.send(result);
+    });
 
-
-
-
-    // All "Delivery Men"
-    app.get("/allDeliveryMan", async (req, res) => {
-      const filter = { userRole: "Delivery Men" };
-      const result = await userCollection.find(filter).toArray();
+    // Update User Role by ID
+    app.patch("/user-role/:id", async (req, res) => {
+      const userId = req.params.id;
+      const { role } = req.body;
+      const filter = { _id: new ObjectId(userId) };
+      const options = { upsert: true };
+      const newData = {
+        $set: {
+          userRole: role,
+        },
+      };
+      const result = await userCollection.updateOne(filter, newData, options);
       res.send(result);
     });
 
@@ -120,25 +152,25 @@ async function run() {
           longitude: updatedDoc.longitude,
           status: updatedDoc.status,
           date: updatedDoc.date,
-        }
-      }
-      const result = parcelCollection.updateOne(filter, newData, options)
-      res.send(result)
-    })
+        },
+      };
+      const result = parcelCollection.updateOne(filter, newData, options);
+      res.send(result);
+    });
 
-    // Cancel Parcel Order by id
+    // Parcel Status Update
     app.patch("/my-parcel-book/:id", async (req, res) => {
       const id = req.params.id;
       const updatedDoc = req.body;
       const filter = { _id: new ObjectId(id) };
       const newData = {
-        $set: updatedDoc 
-      }
+        $set: updatedDoc,
+      };
       const result = await parcelCollection.updateOne(filter, newData);
-      res.send(result)
-    })
+      res.send(result);
+    });
 
-
+    // Admin APIs
     //Admin Statistics
     app.get("/admin-statistics", async (req, res) => {
       const parcels = await parcelCollection.estimatedDocumentCount();
@@ -148,6 +180,38 @@ async function run() {
         parcels,
         users,
       });
+    });
+
+    // Get All Users
+    app.get("/all-users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
+    // All "Delivery Men"
+    app.get("/allDeliveryMan", async (req, res) => {
+      const filter = { userRole: "Delivery Men" };
+      const result = await userCollection.find(filter).toArray();
+      res.send(result);
+    });
+
+    // All Parcels
+    app.get("/all-parcels", async (req, res) => {
+      const result = await parcelCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Manage Parcel
+    app.put("/manage-parcel/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatedDoc = req.body;
+      const newData = {
+        $set: updatedDoc,
+      };
+      const result = await parcelCollection.updateOne(filter, newData, options);
+      res.send(result);
     });
 
     // Statistics Parcel Booked By date
@@ -175,7 +239,6 @@ async function run() {
         .toArray();
       res.send(parcels);
     });
-
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
