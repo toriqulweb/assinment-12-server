@@ -109,6 +109,16 @@ async function run() {
       res.send(result);
     });
 
+    // Delete User by email
+    app.delete("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const result = await userCollection.deleteOne(filter);
+      res.send(result);
+    });
+
+    // ---------------------------------------
+
     // Book A Parcel Post
     app.post("/parcel-book", async (req, res) => {
       const data = req.body;
@@ -167,6 +177,14 @@ async function run() {
         $set: updatedDoc,
       };
       const result = await parcelCollection.updateOne(filter, newData);
+      res.send(result);
+    });
+
+    // Delete parcel by id
+    app.delete("/parcel/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await parcelCollection.deleteOne(filter);
       res.send(result);
     });
 
